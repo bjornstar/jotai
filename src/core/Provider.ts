@@ -56,7 +56,7 @@ const stateToPrintable = ([state, atoms]: [State, AnyAtom[]]) =>
         return []
       }
       const dependents = mounted.d
-      const atomState = state.a.get(atom) || ({} as AtomState)
+      const atomState = state.a.get(atom) || ({} as AtomState<unknown>)
       return [
         [
           atomToPrintable(atom),

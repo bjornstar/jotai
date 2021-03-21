@@ -20,7 +20,7 @@ type InvalidatedRevision = number
 type ReadDependencies = Map<AnyAtom, Revision>
 
 // immutable atom state
-export type AtomState<Value = unknown> = {
+export type AtomState<Value> = {
   e?: Error // read error
   p?: Promise<void> // read promise
   w?: Promise<void> // write promise
@@ -30,7 +30,7 @@ export type AtomState<Value = unknown> = {
   d: ReadDependencies
 }
 
-type AtomStateMap = WeakMap<AnyAtom, AtomState>
+type AtomStateMap<Value> = WeakMap<AnyAtom, AtomState<Value>>
 
 type Listeners = Set<() => void>
 type Dependents = Set<AnyAtom>
@@ -49,10 +49,10 @@ type StateVersion = number
 type PendingAtoms = Set<AnyAtom>
 
 // mutable state
-export type State = {
+export type State<Value = unknown> = {
   n?: NewAtomReceiver
   v: StateVersion
-  a: AtomStateMap
+  a: AtomStateMap<Value>
   m: MountedMap
   p: PendingAtoms
 }
@@ -70,7 +70,7 @@ export const createState = (
   }
   if (initialValues) {
     for (const [atom, value] of initialValues) {
-      const atomState: AtomState = { v: value, r: 0, d: new Map() }
+      const atomState = { v: value, r: 0, d: new Map() }
       if (
         typeof process === 'object' &&
         process.env.NODE_ENV !== 'production'
@@ -83,32 +83,28 @@ export const createState = (
   return state
 }
 
-const getAtomState = <Value>(state: State, atom: Atom<Value>) =>
-  state.a.get(atom) as AtomState<Value> | undefined
+const getAtomState = <Value>(state: State<Value>, atom: Atom<Value>) =>
+  state.a.get(atom)
 
 const wipAtomState = <Value>(
-  state: State,
+  state: State<Value>,
   atom: Atom<Value>,
   dependencies?: Set<AnyAtom>
 ): [AtomState<Value>, ReadDependencies | undefined] => {
   const atomState = getAtomState(state, atom)
-  const nextAtomState = {
-    r: 0,
-    ...atomState,
-    d: dependencies
-      ? new Map(
-          Array.from(dependencies).map((a) => [
-            a,
-            getAtomState(state, a)?.r ?? 0,
-          ])
-        )
-      : atomState
-      ? atomState.d
-      : new Map(),
-  }
-  if (!atomState && hasInitialValue(atom)) {
-    nextAtomState.v = atom.init
-  }
+
+  const d = dependencies
+    ? new Map(
+        Array.from(dependencies).map((a) => [a, getAtomState(state, a)?.r ?? 0])
+      )
+    : atomState
+    ? atomState.d
+    : new Map()
+  const r = 0
+  const v = !atomState && hasInitialValue(atom) ? atom.init : atomState?.v
+
+  const nextAtomState = { r, ...atomState, d, v }
+
   return [nextAtomState, atomState?.d]
 }
 
@@ -197,7 +193,7 @@ const scheduleReadAtomState = <Value>(
 }
 
 const readAtomState = <Value>(
-  state: State,
+  state: State<Value>,
   atom: Atom<Value>,
   force?: boolean
 ): AtomState<Value> => {
@@ -313,7 +309,7 @@ const readAtomState = <Value>(
 }
 
 export const readAtom = <Value>(
-  state: State,
+  state: State<Value>,
   readingAtom: Atom<Value>
 ): AtomState<Value> => {
   const atomState = readAtomState(state, readingAtom)
